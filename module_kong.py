@@ -99,13 +99,12 @@ def build_CycleGAN():
     d_in_b = Input(shape=(None,None,3), name="D_B_IN")
     discriminator_a = build_D(d_in_a, name="D_A")
     discriminator_b = build_D(d_in_b, name="D_B")
-    discriminator_a.trainable = False
-    discriminator_b.trainable = False
+
 
     g_in_a = Input(shape=(None, None, 3), name="G_A_IN")
     g_in_b = Input(shape=(None, None, 3), name="G_B_IN")
     generator_a2b = build_G(g_in_a,name = "G_A2B")
-    generator_b2a = build_G(g_in_b,name = "G_B2A" )
+    generator_b2a = build_G(g_in_b,name = "G_B2A")
 
     fake_b       = generator_a2b(g_in_a)
     fake_b_score = discriminator_b(fake_b)
@@ -132,6 +131,9 @@ def build_CycleGAN():
     discriminator_b.compile(loss="mae", optimizer=optimizer_d_b)
     GAN_b2a.compile(loss=["mae","mae"], optimizer=optimizer_GAN_b2a, loss_weights=[10,1])
     GAN_a2b.compile(loss=["mae","mae"], optimizer=optimizer_GAN_a2b, loss_weights=[10,1])
+
+    discriminator_a.trainable = False
+    discriminator_b.trainable = False
     
     return discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b
 

@@ -9,34 +9,62 @@ from module_kong import build_CycleGAN
 
 import tensorflow as tf
 
+from build_dataset_combine import *
+import shutil
+
 import cv2
 
+# tf.compat.v1.disable_eager_execution()
+
+# def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
+#     img_A = imread(image_path[0], mode="RGB")
+#     img_B = imread(image_path[1], mode="RGB")
+#     if not is_testing:
+#         img_A = scipy.misc.imresize(img_A, [load_size, load_size])
+#         img_B = scipy.misc.imresize(img_B, [load_size, load_size])
+#         h1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
+#         w1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
+#         img_A = img_A[h1:h1+fine_size, w1:w1+fine_size]
+#         img_B = img_B[h1:h1+fine_size, w1:w1+fine_size]
+
+#         if np.random.random() > 0.5:
+#             img_A = np.fliplr(img_A)
+#             img_B = np.fliplr(img_B)
+#     else:
+#         img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
+#         img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
+
+#     img_A = img_A/127.5 - 1.
+#     img_B = img_B/127.5 - 1.
+
+#     img_AB = np.concatenate((img_A, img_B), axis=2)
+#     # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
+#     return img_AB
+
+def augmentation(img, load_size=286, fine_size=256):
+    img = scipy.misc.imresize(img, [load_size, load_size])
+    h1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
+    w1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
+    img = img[h1:h1+fine_size, w1:w1+fine_size]
+    
+    if np.random.random() > 0.5:
+        img = np.fliplr(img)
+    return img
+
+def combine_dataset(datasetA, datasetB):
+    min_amount = np.minimum(len(datasetA), len(datasetB))
+    combine_list = []
+    for i in range(min_amount):
+        combine_list.append( [ datasetA[i], datasetB[i]  ] )
+    return np.array(combine_list)
 
 
-def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
-    img_A = imread(image_path[0], mode="RGB")
-    img_B = imread(image_path[1], mode="RGB")
-    if not is_testing:
-        img_A = scipy.misc.imresize(img_A, [load_size, load_size])
-        img_B = scipy.misc.imresize(img_B, [load_size, load_size])
-        h1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
-        w1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
-        img_A = img_A[h1:h1+fine_size, w1:w1+fine_size]
-        img_B = img_B[h1:h1+fine_size, w1:w1+fine_size]
 
-        if np.random.random() > 0.5:
-            img_A = np.fliplr(img_A)
-            img_B = np.fliplr(img_B)
-    else:
-        img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
-        img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
-
-    img_A = img_A/127.5 - 1.
-    img_B = img_B/127.5 - 1.
-
-    img_AB = np.concatenate((img_A, img_B), axis=2)
-    # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
-    return img_AB
+def load_all_data(file_names):
+    # file_names = [ file_name for file_name in os.listdir(img_dir) if ".jpg" in file_name.lower() ]
+    imgs = [ augmentation(imread(file_name, mode="RGB")) for file_name in file_names ]
+    imgs = (np.array(imgs) / 255)*2 -1
+    return imgs
 
 
 def sample_test_data(src_path, dst_path, generator_a2b,counter = 0, epoch = 0):
@@ -52,6 +80,12 @@ def sample_test_data(src_path, dst_path, generator_a2b,counter = 0, epoch = 0):
 
 def train():
     start_time = time.time()
+    Check_dir_exist_and_build_new_dir("result/")
+    Check_dir_exist_and_build_new_dir("result/img")
+    shutil.copy("load_and_train.py","result/load_and_train.py")
+    shutil.copy("module_kong.py",   "result/module_kong.py")
+
+    
     discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
     print("create model cost time:",time.time() - start_time)
     epochs = 200
@@ -79,8 +113,22 @@ def train():
         np.random.shuffle(dataA)
         np.random.shuffle(dataB)
 
+        dataA_imgs = load_all_data(dataA)
+        dataB_imgs = load_all_data(dataB)
+        combine_imgs = combine_dataset(dataA_imgs, dataB_imgs)
+        
+        # datasetA = tf.data.Dataset.from_tensor_slices(dataA_imgs).prefetch(10)
+        # datasetB = tf.data.Dataset.from_tensor_slices(dataB_imgs).prefetch(10)
+        # imgA = iter(datasetA)
+        # imgB = iter(datasetB)
+        datasetC = tf.data.Dataset.from_tensor_slices(combine_imgs).prefetch(5)
+        pairs = iter(datasetC)
+
+        
         # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
-        batch_idxs = min(min(len(dataA), len(dataB)), train_size) // batch_size
+        # batch_idxs = min(min(len(dataA), len(dataB)), train_size) // batch_size
+        batch_idxs = len(combine_imgs) // batch_size
+
         # lr = args.lr if epoch < args.epoch_step else args.lr*(args.epoch-epoch)/(args.epoch-args.epoch_step)
         lr = 0.0002 if epoch < epoch_step else 0.0002*(epochs-epoch)/(epochs-epoch_step)
         discriminator_a.optimizer.lr = lr
@@ -92,14 +140,23 @@ def train():
             batch_start_time = time.time()
             #################################################################################################################
             # Load Batch data
-            batch_files = list(zip(dataA[idx * batch_size : (idx + 1) * batch_size],
-                                   dataB[idx * batch_size : (idx + 1) * batch_size])) ### [('./datasets/horse2zebra/trainA\\n02381460_1766.jpg', './datasets/horse2zebra/trainB\\n02391049_22.jpg')]
-            batch_images = [load_train_data(batch_file) for batch_file in batch_files]
-            batch_images = np.array(batch_images).astype(np.float32) ### batch_images.shape (1, 256, 256, 6)
+            # batch_files = list(zip(dataA[idx * batch_size: (idx + 1) * batch_size],
+            #                        dataB[idx * batch_size: (idx + 1) * batch_size])) ### [('./datasets/horse2zebra/trainA\\n02381460_1766.jpg', './datasets/horse2zebra/trainB\\n02391049_22.jpg')]
+            # batch_images = [load_train_data(batch_file) for batch_file in batch_files]
+            # batch_images = np.array(batch_images).astype(np.float32) ### batch_images.shape (1, 256, 256, 6)
             # print(batch_files)
 
-            real_a = batch_images[:,:,:,0:3]
-            real_b = batch_images[:,:,:,3:6]
+            # real_a = batch_images[:,:,:,0:3]
+            # real_b = batch_images[:,:,:,3:6]
+            
+            # real_a = tf.reshape( tf.cast(next(imgA), tf.float32), shape=(1,256,256,3))    
+            # real_b = tf.reshape( tf.cast(next(imgB), tf.float32), shape=(1,256,256,3))
+
+            pair_img = tf.cast(next(pairs), tf.float32)
+            real_a = pair_img[0:1, ...]
+            real_b = pair_img[1:2, ...]
+            
+            
             # print("real_a",real_a[0])
             # cv2.imshow("real_a",real_a[0])
             # cv2.waitKey(0)
@@ -115,25 +172,25 @@ def train():
             fake_a = generator_b2a(real_b) ### 丟進去要的形式要是 BHWC
             fake_a_concat_real_a = tf.concat([fake_a, real_a] , axis=0)
             discriminator_a.train_on_batch( fake_a_concat_real_a, y_d )
-            #################################################################################################################
+            # #################################################################################################################
             # Update G network and record fake outputs
             discriminator_b.trainable = False
             GAN_a2b.train_on_batch( real_a, [real_a, y_g] )
 
             discriminator_a.trainable = False
             GAN_b2a.train_on_batch( real_b, [real_b, y_g] )
-            #################################################################################################################
+            # #################################################################################################################
             ##################################################################################################################################################################################################################################
             # counter += 1 原始寫這邊，我把它調到下面去囉
             cost_time = time.time() - start_time
-            hour = cost_time//3600 ; minute = cost_time%3600//60 ; second = cost_time%3600%60
+            hour = cost_time//3600; minute = cost_time%3600//60; second = cost_time%3600%60
             print(("Epoch: [%2d] [%4d/%4d] b_time: %4.2f, total_time:%2d:%02d:%02d counter:%d" % (
                 epoch, idx, batch_idxs, time.time() - batch_start_time, hour, minute, second, counter)))
 
             if(counter % 100 == 0):
                 test_src_path = "datasets/horse2zebra/testA/n02381460_120.jpg"
                 test_dst_path = "result/A-n02381460_120_to_B-zibra"
-                sample_test_data(test_src_path, test_dst_path,generator_a2b, counter, epoch)
+                sample_test_data(test_src_path, test_dst_path, generator_a2b, counter, epoch)
 
 
             counter += 1  ### 調到這裡

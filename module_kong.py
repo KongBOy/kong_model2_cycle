@@ -170,7 +170,7 @@ if(__name__ == "__main__"):
     # print("out_d.numpy()",out_d.numpy())
 
     discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
-    # discriminator_a.save('discriminator_a.h5', save_format="tf") 
+    discriminator_a.save('discriminator_a.h5') 
 # d_x  = InstanceNormalization(axis=3, 
 #                                 center=True, 
 #                                 scale=True,

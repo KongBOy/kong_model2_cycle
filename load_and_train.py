@@ -115,19 +115,19 @@ def train():
 
         dataA_imgs = load_all_data(dataA)
         dataB_imgs = load_all_data(dataB)
-        combine_imgs = combine_dataset(dataA_imgs, dataB_imgs)
+        # combine_imgs = combine_dataset(dataA_imgs, dataB_imgs)
         
-        # datasetA = tf.data.Dataset.from_tensor_slices(dataA_imgs).prefetch(10)
-        # datasetB = tf.data.Dataset.from_tensor_slices(dataB_imgs).prefetch(10)
-        # imgA = iter(datasetA)
-        # imgB = iter(datasetB)
-        datasetC = tf.data.Dataset.from_tensor_slices(combine_imgs).prefetch(5)
-        pairs = iter(datasetC)
+        datasetA = tf.data.Dataset.from_tensor_slices(dataA_imgs).prefetch(5)
+        datasetB = tf.data.Dataset.from_tensor_slices(dataB_imgs).prefetch(5)
+        imgA = iter(datasetA)
+        imgB = iter(datasetB)
+        # datasetC = tf.data.Dataset.from_tensor_slices(combine_imgs).prefetch(5)
+        # pairs = iter(datasetC)
 
         
         # batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
-        # batch_idxs = min(min(len(dataA), len(dataB)), train_size) // batch_size
-        batch_idxs = len(combine_imgs) // batch_size
+        batch_idxs = min(min(len(dataA), len(dataB)), train_size) // batch_size
+        # batch_idxs = len(combine_imgs) // batch_size
 
         # lr = args.lr if epoch < args.epoch_step else args.lr*(args.epoch-epoch)/(args.epoch-args.epoch_step)
         lr = 0.0002 if epoch < epoch_step else 0.0002*(epochs-epoch)/(epochs-epoch_step)
@@ -149,12 +149,12 @@ def train():
             # real_a = batch_images[:,:,:,0:3]
             # real_b = batch_images[:,:,:,3:6]
             
-            # real_a = tf.reshape( tf.cast(next(imgA), tf.float32), shape=(1,256,256,3))    
-            # real_b = tf.reshape( tf.cast(next(imgB), tf.float32), shape=(1,256,256,3))
+            real_a = tf.reshape( tf.cast(next(imgA), tf.float32), shape=(1,256,256,3))    
+            real_b = tf.reshape( tf.cast(next(imgB), tf.float32), shape=(1,256,256,3))
 
-            pair_img = tf.cast(next(pairs), tf.float32)
-            real_a = pair_img[0:1, ...]
-            real_b = pair_img[1:2, ...]
+            # pair_img = tf.cast(next(pairs), tf.float32)
+            # real_a = pair_img[0:1, ...]
+            # real_b = pair_img[1:2, ...]
             
             
             # print("real_a",real_a[0])

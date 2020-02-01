@@ -3,8 +3,8 @@ from tensorflow.python.keras.layers import Input, Conv2D, LeakyReLU, BatchNormal
 from tensorflow.python.keras.optimizers import Adam
 import tensorflow as tf
 # from tensorflow_addons.layers import InstanceNormalization
-def instance_norm(in_x, name="instance_norm"):
-    
+
+def instance_norm(in_x, name="instance_norm"):    
     depth = in_x.get_shape()[3]
     scale = tf.Variable(tf.random.normal(shape=[depth],mean=1.0, stddev=0.02), dtype=tf.float32)
     #print(scale)
@@ -16,22 +16,42 @@ def instance_norm(in_x, name="instance_norm"):
     inv = tf.math.rsqrt(variance + epsilon)
     normalized = (in_x-mean)*inv
     return scale*normalized + offset
-    
+
+
+class InstanceNorm_kong(tf.keras.layers.Layer):
+    def __init__(self):
+        super(InstanceNorm_kong, self).__init__()
+
+    def build(self, input_shape):
+        depth = input_shape[-1]
+        self.scale  = self.add_variable("scale", shape = [depth], initializer=tf.random_normal_initializer(mean=1.0, stddev=0.02))
+        self.offset = self.add_variable("ofset", shape = [depth], initializer=tf.constant_initializer(0.0) )
+
+    def call(self, input):
+        mean, variance = tf.nn.moments(input, axes=[1,2], keepdims=True)
+        epsilon = 1e-5
+        inv = tf.math.rsqrt(variance + epsilon)
+        normalized = (input-mean)*inv
+        
+        return self.scale*normalized + self.offset
+        # return tf.matmul(input, self.kernel)
+
+
 def build_D(d_in, name = ""):
     
     d_x  = Conv2D(64  , kernel_size=4, strides=2, padding="same")(d_in)
     d_x  = LeakyReLU(alpha = 0.2)(d_x)
 
     d_x  = Conv2D(64*2, kernel_size=4, strides=2, padding="same")(d_x)
-    d_x  = instance_norm(d_x)
+    d_x  = InstanceNorm_kong()(d_x)
     d_x  = LeakyReLU(alpha = 0.2)(d_x)
 
     d_x  = Conv2D(64*4, kernel_size=4, strides=2, padding="same")(d_x)
-    d_x  = instance_norm(d_x)
+    d_x  = InstanceNorm_kong()(d_x)
     d_x  = LeakyReLU(alpha = 0.2)(d_x)
 
     d_x  = Conv2D(64*8, kernel_size=4, strides=2, padding="same")(d_x)
-    d_x  = instance_norm(d_x)
+    d_x  = InstanceNorm_kong()(d_x)
     d_x  = LeakyReLU(alpha = 0.2)(d_x)
 
     d_score_map  = Conv2D(1, kernel_size=4, strides=1, padding="same")(d_x)
@@ -46,11 +66,11 @@ def build_G(g_in,name = ""):
         p = int( (ks-1)/2 )
         y = tf.pad( x, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
         y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
-        y = instance_norm(y)
+        y = InstanceNorm_kong()(y)
         y = ReLU()(y)
         y = tf.pad( y, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT")
         y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
-        y = instance_norm(y)
+        y = InstanceNorm_kong()(y)
         return y + x
 
     
@@ -58,15 +78,15 @@ def build_G(g_in,name = ""):
 
     ### c1
     g_x = Conv2D(64  , kernel_size=7, strides=1, padding="valid")(g_x)
-    g_x = BatchNormalization( )(g_x)
+    g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
     ### c2
     g_x = Conv2D(64*2, kernel_size=3, strides=2, padding="same")(g_x)
-    g_x = BatchNormalization( )(g_x)
+    g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
     ### c3
     g_x = Conv2D(64*4, kernel_size=3, strides=2, padding="same")(g_x)
-    g_x = BatchNormalization( )(g_x)
+    g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
 
     g_x = residule_block(g_x, c_num=64*4)
@@ -80,11 +100,11 @@ def build_G(g_in,name = ""):
     g_x = residule_block(g_x, c_num=64*4)
 
     g_x = Conv2DTranspose(64*2, kernel_size=3, strides=2, padding="same")(g_x)
-    g_x = instance_norm(g_x)
+    g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
 
     g_x = Conv2DTranspose(64  , kernel_size=3, strides=2, padding="same")(g_x)
-    g_x = instance_norm(g_x)
+    g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
 
     g_x = tf.pad(g_x, [ [0,0], [3,3], [3,3], [0,0] ], "REFLECT")
@@ -150,7 +170,7 @@ if(__name__ == "__main__"):
     # print("out_d.numpy()",out_d.numpy())
 
     discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
-    discriminator_a.save('discriminator_a.h5', save_format="tf") 
+    # discriminator_a.save('discriminator_a.h5', save_format="tf") 
 # d_x  = InstanceNormalization(axis=3, 
 #                                 center=True, 
 #                                 scale=True,

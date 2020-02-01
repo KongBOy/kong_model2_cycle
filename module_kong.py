@@ -37,6 +37,27 @@ class InstanceNorm_kong(tf.keras.layers.Layer):
         # return tf.matmul(input, self.kernel)
 
 
+class ResBlock(tf.keras.layers.Layer):
+    def __init__(self, c_num, ks=3, s=1):
+        super(ResBlock, self).__init__()
+        self.ks = ks
+        self.conv_1 = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")
+        self.in_1   = InstanceNorm_kong()
+        self.relu   = ReLU()
+        self.conv_2 = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")
+        self.in_2   = InstanceNorm_kong()
+    
+    def call(self, input_tensor):
+        p = int( (self.ks-1)/2 )
+        x = tf.pad( input_tensor, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
+        x = self.conv_1(x)
+        x = self.in_1(x)
+        x = self.relu(x)
+        x = tf.pad( x, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
+        x = self.conv_2(x)
+        x = self.in_2(x)
+        return x + input_tensor
+
 def build_D(d_in, name = ""):
     
     d_x  = Conv2D(64  , kernel_size=4, strides=2, padding="same")(d_in)
@@ -62,16 +83,16 @@ def build_D(d_in, name = ""):
 
 
 def build_G(g_in,name = ""):
-    def residule_block(x, c_num, ks=3, s=1):
-        p = int( (ks-1)/2 )
-        y = tf.pad( x, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
-        y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
-        y = InstanceNorm_kong()(y)
-        y = ReLU()(y)
-        y = tf.pad( y, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT")
-        y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
-        y = InstanceNorm_kong()(y)
-        return y + x
+    # def residule_block(x, c_num, ks=3, s=1):
+    #     p = int( (ks-1)/2 )
+    #     y = tf.pad( x, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
+    #     y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
+    #     y = InstanceNorm_kong()(y)
+    #     y = ReLU()(y)
+    #     y = tf.pad( y, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT")
+    #     y = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")(y)
+    #     y = InstanceNorm_kong()(y)
+    #     return y + x
 
     
     g_x = tf.pad(g_in, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
@@ -89,15 +110,24 @@ def build_G(g_in,name = ""):
     g_x = InstanceNorm_kong()(g_x)
     g_x = ReLU()(g_x)
 
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
-    g_x = residule_block(g_x, c_num=64*4)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    g_x = ResBlock(c_num=64*4)(g_x)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
+    # g_x = residule_block(g_x, c_num=64*4)
 
     g_x = Conv2DTranspose(64*2, kernel_size=3, strides=2, padding="same")(g_x)
     g_x = InstanceNorm_kong()(g_x)
@@ -140,21 +170,26 @@ def build_CycleGAN():
     optimizer_d_b = Adam(lr=0.0002, beta_1=0.5)
     optimizer_GAN_b2a = Adam(lr=0.0002, beta_1=0.5)
     optimizer_GAN_a2b = Adam(lr=0.0002, beta_1=0.5)
-    
-    ### debug用
-    # generator_a2b.trainable = False
-    # generator_b2a.trainable = False
-    # GAN_b2a.trainable = False
-    # GAN_a2b.trainable = False
-
     discriminator_a.compile(loss="mae", optimizer=optimizer_d_a, )
     discriminator_b.compile(loss="mae", optimizer=optimizer_d_b)
     GAN_b2a.compile(loss=["mae","mae"], optimizer=optimizer_GAN_b2a, loss_weights=[10,1])
     GAN_a2b.compile(loss=["mae","mae"], optimizer=optimizer_GAN_a2b, loss_weights=[10,1])
 
+
+    # optimizer_D = Adam(lr=0.0002, beta_1=0.5)
+    # optimizer_G = Adam(lr=0.0002, beta_1=0.5)
+    # discriminator_a.compile(loss="mae", optimizer=optimizer_D, )
+    # discriminator_b.compile(loss="mae", optimizer=optimizer_D)
+    # GAN_b2a.compile(loss=["mae","mae"], optimizer=optimizer_G, loss_weights=[10,1])
+    # GAN_a2b.compile(loss=["mae","mae"], optimizer=optimizer_G, loss_weights=[10,1])
+
     discriminator_a.trainable = False
     discriminator_b.trainable = False
-    
+    ### debug用
+    # generator_a2b.trainable = False
+    # generator_b2a.trainable = False
+    # GAN_b2a.trainable = False
+    # GAN_a2b.trainable = False
     return discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b
 
 if(__name__ == "__main__"):

@@ -52,14 +52,14 @@ def sample_test_data(src_path, dst_path, generator_a2b,counter = 0, epoch = 0):
 
 def train():
     start_time = time.time()
+    discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
+    print("create model cost time:",time.time() - start_time)
+
     Check_dir_exist_and_build_new_dir("result/")
     Check_dir_exist_and_build_new_dir("result/img")
     shutil.copy("load_and_train.py","result/load_and_train.py")
     shutil.copy("module_kong.py",   "result/module_kong.py")
 
-    
-    discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
-    print("create model cost time:",time.time() - start_time)
     epochs = 200
     epoch_step = 100
     counter = 1
@@ -100,10 +100,10 @@ def train():
 
         # lr = args.lr if epoch < args.epoch_step else args.lr*(args.epoch-epoch)/(args.epoch-args.epoch_step)
         lr = 0.0002 if epoch < epoch_step else 0.0002*(epochs-epoch)/(epochs-epoch_step)
-        discriminator_a.optimizer.lr = lr
-        discriminator_b.optimizer.lr = lr
-        GAN_a2b.optimizer.lr = lr
-        GAN_b2a.optimizer.lr = lr
+        # discriminator_a.optimizer.lr = lr
+        # discriminator_b.optimizer.lr = lr
+        # GAN_a2b.optimizer.lr = lr
+        # GAN_b2a.optimizer.lr = lr
 
         for idx in range(0, batch_idxs):
             batch_start_time = time.time()

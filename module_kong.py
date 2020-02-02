@@ -43,7 +43,6 @@ class ResBlock(tf.keras.layers.Layer):
         self.ks = ks
         self.conv_1 = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")
         self.in_1   = InstanceNorm_kong()
-        self.relu   = ReLU()
         self.conv_2 = Conv2D( c_num, kernel_size=ks, strides=s, padding="valid")
         self.in_2   = InstanceNorm_kong()
     
@@ -52,11 +51,42 @@ class ResBlock(tf.keras.layers.Layer):
         x = tf.pad( input_tensor, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
         x = self.conv_1(x)
         x = self.in_1(x)
-        x = self.relu(x)
+        x = tf.nn.relu(x)
         x = tf.pad( x, [ [0,0], [p,p], [p,p], [0,0] ], "REFLECT" )
         x = self.conv_2(x)
         x = self.in_2(x)
         return x + input_tensor
+
+class Discriminator(tf.keras.Model):
+    def __init__(self,**kwargs):
+        super(Discriminator, self).__init__(**kwargs)
+        self.conv_1 = Conv2D(64  ,   kernel_size=4, strides=2, padding="same")
+        self.conv_2 = Conv2D(64*2,   kernel_size=4, strides=2, padding="same")
+        self.conv_3 = Conv2D(64*4,   kernel_size=4, strides=2, padding="same")
+        self.conv_4 = Conv2D(64*8,   kernel_size=4, strides=2, padding="same")
+        self.conv_map = Conv2D(1   ,   kernel_size=4, strides=1, padding="same")
+
+        self.in_2   = InstanceNorm_kong()
+        self.in_3   = InstanceNorm_kong()
+        self.in_4   = InstanceNorm_kong()
+    
+    def call(self, input_tensor):
+        x = self.conv_1(input_tensor)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+
+        x = self.conv_2(x)
+        x = self.in_2(x)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+
+        x = self.conv_3(x)
+        x = self.in_3(x)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+
+        x = self.conv_4(x)
+        x = self.in_4(x)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+
+        return self.conv_map(x)
 
 def build_D(d_in, name = ""):
     
@@ -206,6 +236,7 @@ if(__name__ == "__main__"):
 
     discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
     discriminator_a.save('discriminator_a.h5') 
+    # generator_a2b.save('generator_a2b.h5') 
 # d_x  = InstanceNormalization(axis=3, 
 #                                 center=True, 
 #                                 scale=True,

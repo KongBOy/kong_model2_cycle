@@ -20,8 +20,8 @@ def instance_norm(in_x, name="instance_norm"):
 
 
 class InstanceNorm_kong(tf.keras.layers.Layer):
-    def __init__(self):
-        super(InstanceNorm_kong, self).__init__()
+    def __init__(self,**kwargs):
+        super(InstanceNorm_kong, self).__init__(**kwargs)
 
     def build(self, input_shape):
         depth = input_shape[-1]
@@ -159,7 +159,7 @@ class CycleGAN(tf.keras.models.Model):
         self.discriminator_b = Discriminator(name="D_B")
         self.generator_a2b   = Generator(name="G_A2B")
         self.generator_b2a   = Generator(name="G_B2A")
-    
+
     def call(self, imgA, imgB):
         fake_b       = self.generator_a2b  (imgA)
         fake_b_score = self.discriminator_b(fake_b)
@@ -171,10 +171,12 @@ class CycleGAN(tf.keras.models.Model):
         fake_a_cyc_b = self.generator_a2b  (fake_a)
         real_a_score = self.discriminator_a(imgA)
 
+        ### 沒有用 identical loss
         # return fake_b_score, real_b_score, \
         #        fake_a_score, real_a_score, \
         #        fake_b_cyc_a, fake_a_cyc_b
 
+        ### 有用 identical loss
         same_a       = self.generator_b2a(imgA)
         same_b       = self.generator_a2b(imgB)
 
@@ -182,6 +184,39 @@ class CycleGAN(tf.keras.models.Model):
                fake_a_score, real_a_score, \
                fake_b_cyc_a, fake_a_cyc_b, \
                same_a, same_b
+class CycleGAN(tf.keras.models.Model):
+    def __init__(self):
+        super(CycleGAN, self).__init__()
+        self.discriminator_a = Discriminator(name="D_A")
+        self.discriminator_b = Discriminator(name="D_B")
+        self.generator_a2b   = Generator(name="G_A2B")
+        self.generator_b2a   = Generator(name="G_B2A")
+
+    def call(self, imgA, imgB):
+        fake_b       = self.generator_a2b  (imgA)
+        fake_b_score = self.discriminator_b(fake_b)
+        fake_b_cyc_a = self.generator_b2a  (fake_b)
+        real_b_score = self.discriminator_b(imgB)
+        
+        fake_a       = self.generator_b2a(imgB)
+        fake_a_score = self.discriminator_a(fake_a)
+        fake_a_cyc_b = self.generator_a2b  (fake_a)
+        real_a_score = self.discriminator_a(imgA)
+
+        ### 沒有用 identical loss
+        # return fake_b_score, real_b_score, \
+        #        fake_a_score, real_a_score, \
+        #        fake_b_cyc_a, fake_a_cyc_b
+
+        ### 有用 identical loss
+        same_a       = self.generator_b2a(imgA)
+        same_b       = self.generator_a2b(imgB)
+
+        return fake_b_score, real_b_score, \
+               fake_a_score, real_a_score, \
+               fake_b_cyc_a, fake_a_cyc_b, \
+               same_a, same_b
+
 
 @tf.function
 def mse_kong(tensor1, tensor2, lamb=tf.constant(1.,tf.float32)):
@@ -193,8 +228,9 @@ def mae_kong(tensor1, tensor2, lamb=tf.constant(1.,tf.float32)):
     loss = tf.reduce_mean( tf.math.abs( tensor1 - tensor2 ) )
     return loss * lamb
 
-@tf.function
+
 # def train_step(imgA, imgB, optimizer_G, optimizer_D, cyclegan):
+@tf.function
 def train_step(imgA, imgB, optimizer_G_A2B, optimizer_G_B2A, optimizer_D_A, optimizer_D_B, cyclegan):
     with tf.GradientTape(persistent=True) as tape:
         fake_b_score, real_b_score, \
@@ -214,7 +250,7 @@ def train_step(imgA, imgB, optimizer_G_A2B, optimizer_G_B2A, optimizer_D_A, opti
 
         loss_da_real = mse_kong( real_a_score, tf.ones_like(real_a_score ,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
         loss_da_fake = mse_kong( fake_a_score, tf.zeros_like(fake_a_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
-        loss_db_real = mse_kong( real_b_score, tf.ones_like(real_b_score ,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
+        loss_db_real = mse_kong( real_b_score, tf.ones_like(real_b_score ,dtype=tf.float32),   lamb=tf.constant(1.,tf.float32) )
         loss_db_fake = mse_kong( fake_b_score, tf.zeros_like(fake_b_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
         # d_total_loss = (loss_da_real+loss_da_fake)/2 + (loss_db_real+loss_db_fake)/2
         D_A_loss = (loss_da_real+loss_da_fake)/2  
@@ -235,9 +271,84 @@ def train_step(imgA, imgB, optimizer_G_A2B, optimizer_G_B2A, optimizer_D_A, opti
     optimizer_D_B.apply_gradients( zip(grad_D_B, cyclegan.discriminator_b.trainable_weights )  )
     optimizer_G_A2B.apply_gradients( zip(grad_G_A2B, cyclegan.generator_a2b.  trainable_weights)  )
     optimizer_G_B2A.apply_gradients( zip(grad_G_B2A, cyclegan.generator_b2a.  trainable_weights)  )
+
+
+@tf.function
+def train_step_tensorboard(imgA, imgB, optimizer_G_A2B, optimizer_G_B2A, optimizer_D_A, optimizer_D_B, cyclegan):
+    with tf.GradientTape(persistent=True) as tape:
+        fake_b_score, real_b_score, \
+        fake_a_score, real_a_score, \
+        fake_b_cyc_a, fake_a_cyc_b, \
+        same_a,  same_b = cyclegan(imgA,imgB)
+
+        # loss_rec_a = mae_kong(imgA, fake_b_cyc_a, lamb=tf.constant(10.,tf.float32))
+        # loss_rec_b = mae_kong(imgB, fake_a_cyc_b, lamb=tf.constant(10.,tf.float32))
+        # loss_g2d_b = mse_kong(fake_b_score, tf.ones_like(fake_b_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32))
+        # loss_g2d_a = mse_kong(fake_a_score, tf.ones_like(fake_b_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32))
+        # loss_same_a = mae_kong(imgA, same_a, lamb=tf.constant(0.5,tf.float32))
+        # loss_same_b = mae_kong(imgB, same_b, lamb=tf.constant(0.5,tf.float32))
+        # G_A2B_loss = loss_rec_a + loss_g2d_b + loss_same_b
+        # G_B2A_loss = loss_rec_b + loss_g2d_a + loss_same_a
+
+        # loss_da_real = mse_kong( real_a_score, tf.ones_like(real_a_score ,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
+        # loss_da_fake = mse_kong( fake_a_score, tf.zeros_like(fake_a_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
+        # loss_db_real = mse_kong( real_b_score, tf.ones_like(real_b_score ,dtype=tf.float32),   lamb=tf.constant(1.,tf.float32) )
+        # loss_db_fake = mse_kong( fake_b_score, tf.zeros_like(fake_b_score,dtype=tf.float32), lamb=tf.constant(1.,tf.float32) )
+        # D_A_loss = (loss_da_real+loss_da_fake)/2  
+        # D_B_loss = (loss_db_real+loss_db_fake)/2
     
+    # grad_D_A = tape.gradient(D_A_loss, cyclegan.discriminator_a.trainable_weights )
+    # grad_D_B = tape.gradient(D_B_loss, cyclegan.discriminator_b.trainable_weights )
+    # grad_G_A2B = tape.gradient(G_A2B_loss, cyclegan.generator_a2b.trainable_weights )
+    # grad_G_B2A = tape.gradient(G_B2A_loss, cyclegan.generator_b2a.trainable_weights )
+    
+    
+    # optimizer_D_A.apply_gradients( zip(grad_D_A, cyclegan.discriminator_a.trainable_weights )  )
+    # optimizer_D_B.apply_gradients( zip(grad_D_B, cyclegan.discriminator_b.trainable_weights )  )
+    # optimizer_G_A2B.apply_gradients( zip(grad_G_A2B, cyclegan.generator_a2b.  trainable_weights)  )
+    # optimizer_G_B2A.apply_gradients( zip(grad_G_B2A, cyclegan.generator_b2a.  trainable_weights)  )
 
 
+@tf.function
+def create_model(real_a, real_b, cyclegan):
+    cyclegan(real_a, real_b)
+    return tf.ones(shape = (1,1,1,1))
+
+def log_graph():
+    temp = CycleGAN()
+    cyclegan = temp.kong_build()
+    import time
+    real_a = tf.ones(shape=(1,256,256,3), dtype=tf.float32)
+    real_b = tf.ones(shape=(1,256,256,3), dtype=tf.float32)
+
+    optimizer_D_A = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
+    optimizer_D_B = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
+    optimizer_G_A2B = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
+    optimizer_G_B2A = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
+    
+    start_time = time.time()
+    logdir = "logs"
+    writer = tf.summary.create_file_writer(logdir)
+    tf.summary.trace_on(graph=True)
+    # fake_b_score, real_b_score, \
+    #     fake_a_score, real_a_score, \
+    #     fake_b_cyc_a, fake_a_cyc_b, \
+    #     same_a,  same_b= CycleGAN()(real_a,real_b)
+
+    # with tf.GradientTape(persistent=True) as tape:
+    #     fake_b_score, real_b_score, \
+    #     fake_a_score, real_a_score, \
+    #     fake_b_cyc_a, fake_a_cyc_b, \
+    #     same_a, same_b = cyclegan(real_a,real_b)
+    # train_step_tensorboard(real_a, real_b, optimizer_G_A2B, optimizer_G_B2A, optimizer_D_A, optimizer_D_B, cyclegan)
+    _ = create_model(real_a, real_b, cyclegan)
+
+    with writer.as_default():
+        tf.summary.trace_export(name="test_model", step=0)
+        writer.flush()
+    tf.summary.trace_off()
+    print("tensorboard cost time:",time.time()-start_time)
+    # cyclegan     .save_weights('cyclegan'    , save_format='tf') 
 
 def build_D(d_in, name = ""):
     
@@ -369,5 +480,7 @@ if(__name__ == "__main__"):
     # discriminator_a.save('discriminator_a.h5') 
     # generator_a2b.save('generator_a2b.h5') 
 
+    # cyclegan = CycleGAN()
+    # log_graph()
 
     print("finish")

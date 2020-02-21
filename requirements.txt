@@ -1,0 +1,6 @@
+scipy==1.2.1
+pillow==5.4.1
+imageio==2.5.0
+opencv==3.4.1
+tensorflow-gpu==2.0.0rc2
+gast==0.2.2

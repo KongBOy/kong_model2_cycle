@@ -9,7 +9,7 @@ from module_kong import build_CycleGAN, CycleGAN, train_step
 
 import tensorflow as tf
 
-from build_dataset_combine import *
+from build_dataset_combine import Check_dir_exist_and_build_new_dir
 import shutil
 
 
@@ -50,6 +50,20 @@ def sample_test_data(src_path, dst_path, generator_a2b,counter = 0, epoch = 0):
     scipy.misc.imsave("%s-epoch%04i-%04i.jpg"%(dst_path,epoch,counter), result)
 
 
+def log_graph(cyclegan):
+    logdir = "logs"
+    writer = tf.summary.create_file_writer(logdir)
+    tf.summary.trace_on(graph=True)
+
+    temp_img = np.ones(shpae=(1,256,256,1))
+    print(temp_img)
+
+
+    with writer.as_default():
+        tf.summary.trace_export(name="test_model", step=0)
+        writer.flush()
+    tf.summary.trace_off()
+
 def train():
     start_time = time.time()
     # discriminator_a, discriminator_b, generator_a2b, generator_b2a, GAN_b2a, GAN_a2b = build_CycleGAN()
@@ -61,8 +75,8 @@ def train():
     optimizer_G_A2B = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
     optimizer_G_B2A = tf.keras.optimizers.Adam(lr=0.0002, beta_1=0.5)
     print("create model cost time:",time.time() - start_time)
+    
     ##############################################################################################################
-
     Check_dir_exist_and_build_new_dir("result/")
     Check_dir_exist_and_build_new_dir("result/img")
     shutil.copy("load_and_train.py","result/load_and_train.py")
@@ -82,6 +96,7 @@ def train():
     testB.sort()
     # test_dataPairs = list(zip(testA[:], testB[:]))
 
+    # for epoch in range(1):
     for epoch in range(epochs):
         train_size  = 1e8
         batch_size  = 1
@@ -122,6 +137,7 @@ def train():
         ##############################################################################################################
 
         import cv2
+        # for idx in range(0, 1):
         for idx in range(0, batch_idxs):
             batch_start_time = time.time()
             #################################################################################################################
@@ -174,6 +190,7 @@ def train():
                 test_src_path = "datasets/horse2zebra/testA/n02381460_120.jpg"
                 test_dst_path = "result/A-n02381460_120_to_B-zibra"
                 sample_test_data(test_src_path, test_dst_path, cyclegan.generator_a2b, counter, epoch)
+
 
 
             counter += 1  ### 調到這裡

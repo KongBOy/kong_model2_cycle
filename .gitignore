@@ -6,5 +6,7 @@ datasets
 0 kong_gan
 0 ord_cyclegan
 1 try_things
-2 傳給127.35
+2 傳給127.35*
+events.out.tfevents*
 result*
+有可能*
